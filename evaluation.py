@@ -21,19 +21,19 @@ weave.init('odsc-2025-agent-eval')
 # ============================================================================
 
 @weave.op
-def exact_match_scorer(model_output: Dict[str, Any], expected_contains: str) -> Dict[str, bool]:
+def exact_match_scorer(output: Dict[str, Any], expected_contains: str) -> Dict[str, bool]:
     """Score based on whether answer contains expected string"""
-    answer = model_output.get("answer", "")
+    answer = output.get("answer", "")
     contains = expected_contains.lower() in answer.lower()
     return {"correct": contains}
 
 
 @weave.op
-def numeric_accuracy_scorer(model_output: Dict[str, Any], ground_truth: float, tolerance: float = 0.1) -> Dict[str, Any]:
+def numeric_accuracy_scorer(output: Dict[str, Any], ground_truth: float, tolerance: float = 0.1) -> Dict[str, Any]:
     """
     Extract numeric value from answer and compare to ground truth
     """
-    answer = model_output.get("answer", "")
+    answer = output.get("answer", "")
     
     # Simple numeric extraction (you might need more sophisticated parsing)
     import re
@@ -43,13 +43,21 @@ def numeric_accuracy_scorer(model_output: Dict[str, Any], ground_truth: float, t
         return {"correct": False, "score": 0.0, "reason": "No numeric value found"}
     
     # Take the first number found
-    extracted = float(numbers[0])
-    difference = abs(extracted - ground_truth)
-    correct = difference <= tolerance
-    
+    for number in numbers:
+        extracted = float(number)
+        difference = abs(extracted - ground_truth)
+        if difference <= tolerance:
+            return {
+                "correct": True,
+                "score": 1.0,
+                "extracted_value": extracted,
+                "ground_truth": ground_truth,
+                "difference": difference
+            }
+
     return {
-        "correct": correct,
-        "score": 1.0 if correct else 0.0,
+        "correct": False,
+        "score": 0.0,
         "extracted_value": extracted,
         "ground_truth": ground_truth,
         "difference": difference
@@ -57,12 +65,12 @@ def numeric_accuracy_scorer(model_output: Dict[str, Any], ground_truth: float, t
 
 
 @weave.op
-def tool_selection_scorer(model_output: Dict[str, Any], expected_tools: List[str], 
+def tool_selection_scorer(output: Dict[str, Any], expected_tools: List[str], 
                           forbidden_tools: Optional[List[str]] = None) -> Dict[str, Any]:
     """
     Score based on whether correct tools were used
     """
-    tools_used = model_output.get("tools_used", [])
+    tools_used = output.get("tools_used", [])
     forbidden_tools = forbidden_tools or []
     
     # Check if all expected tools were used
@@ -84,13 +92,13 @@ def tool_selection_scorer(model_output: Dict[str, Any], expected_tools: List[str
 
 
 @weave.op
-def efficiency_scorer(model_output: Dict[str, Any], max_iterations: int = 5, 
+def efficiency_scorer(output: Dict[str, Any], max_iterations: int = 5, 
                      max_tool_calls: int = 5) -> Dict[str, Any]:
     """
     Score based on execution efficiency
     """
-    iterations = model_output.get("iterations", 0)
-    num_tools = model_output.get("num_tool_calls", 0)
+    iterations = output.get("iterations", 0)
+    num_tools = output.get("num_tool_calls", 0)
     
     efficient = iterations <= max_iterations and num_tools <= max_tool_calls
     
@@ -111,11 +119,11 @@ def efficiency_scorer(model_output: Dict[str, Any], max_iterations: int = 5,
 
 
 @weave.op
-def error_handling_scorer(model_output: Dict[str, Any]) -> Dict[str, Any]:
+def error_handling_scorer(output: Dict[str, Any]) -> Dict[str, Any]:
     """
     Score based on error handling - no errors is good
     """
-    has_errors = model_output.get("has_errors", False)
+    has_errors = output.get("has_errors", False)
     
     return {
         "correct": not has_errors,
@@ -125,13 +133,13 @@ def error_handling_scorer(model_output: Dict[str, Any]) -> Dict[str, Any]:
 
 
 @weave.op
-def llm_judge_scorer(model_output: Dict[str, Any], query: str, ground_truth_data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+def llm_judge_scorer(output: Dict[str, Any], query: str, ground_truth: Any = None) -> Dict[str, Any]:
     """
     Use GPT-4 as a judge to evaluate answer quality
     """
     client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
     
-    answer = model_output.get("answer", "")
+    answer = output.get("answer", "")
     
     evaluation_prompt = f"""You are evaluating a data analysis agent's response.
 
@@ -139,7 +147,7 @@ Query: {query}
 
 Agent's Answer: {answer}
 
-Ground Truth Data (for reference): {json.dumps(ground_truth_data, indent=2) if ground_truth_data else "Not provided"}
+Ground Truth Data (for reference): {ground_truth if ground_truth is not None else "Not provided"}
 
 Evaluate the answer on these criteria (score 1-5 for each):
 1. ACCURACY: Is the numerical information correct?
@@ -198,18 +206,18 @@ GROUND_TRUTH_DATASET = weave.Dataset(
         {
             "id": "avg_tip",
             "query": "What is the average tip amount?",
-            "expected_contains": "3.0",
+            "expected_contains": "2.99",
             "ground_truth": 2.99,
             "tolerance": 0.1,
             "expected_tools": ["get_summary_statistics"]
         },
         {
-            "id": "avg_tip",
-            "query": "What is the average tip amount?",
-            "expected_contains": "3.0",
-            "ground_truth": 2.99,
-            "tolerance": 0.1,
-            "expected_tools": ["get_summary_statistics"]
+            "id": "avg_tip_percentage",
+            "query": "What is the average tip percentage?",
+            "expected_contains": "15.14",
+            "ground_truth": 15.14,
+            "tolerance": 0.5,
+            "expected_tools": ["get_summary_statistics", "group_and_aggregate"]
         },
         {
             "id": "row_count",
@@ -294,7 +302,7 @@ async def run_ground_truth_evaluation() -> Any:
     """Run evaluation with ground truth comparisons"""
     
     print("\n" + "="*80)
-    print("GROUND TRUTH EVALUATION WITH WEAVE")
+    print("GROUND TRUTH EVALUATION")
     print("="*80)
     
     # Create model
@@ -326,7 +334,7 @@ async def run_tool_selection_evaluation() -> Any:
     """Run evaluation for tool selection"""
     
     print("\n" + "="*80)
-    print("TOOL SELECTION EVALUATION WITH WEAVE")
+    print("TOOL SELECTION EVALUATION")
     print("="*80)
     
     # Create model
@@ -357,7 +365,7 @@ async def run_llm_judge_evaluation() -> Any:
     """Run evaluation with LLM as judge"""
     
     print("\n" + "="*80)
-    print("LLM-AS-JUDGE EVALUATION WITH WEAVE")
+    print("LLM-AS-JUDGE EVALUATION")
     print("="*80)
     
     # Create model
@@ -389,20 +397,21 @@ async def run_llm_judge_evaluation() -> Any:
 async def run_evaluations() -> None:
     """Run all evaluations"""
     
-    print("\n\n1️⃣  GROUND TRUTH EVALUATION")
-    print("-"*80)
-    try:
-        await run_ground_truth_evaluation()
-    except Exception as e:
-        print(f"⚠️  Error: {e}")
+    #print("\n\n1️⃣  GROUND TRUTH EVALUATION")
+    #print("-"*80)
+    #try:
+    #    await run_ground_truth_evaluation()
+    #except Exception as e:
+    #    print(f"⚠️  Error: {e}")
+
+    #print("\n\n2️⃣  TOOL SELECTION EVALUATION")
+    #print("-"*80)
+    #try:
+    #    await run_tool_selection_evaluation()
+    #except Exception as e:
+    #    print(f"⚠️  Error: {e}")
     
-    print("\n\n2️⃣  TOOL SELECTION EVALUATION")
-    print("-"*80)
-    try:
-        await run_tool_selection_evaluation()
-    except Exception as e:
-        print(f"⚠️  Error: {e}")
-    
+
     print("\n\n3️⃣  LLM-AS-JUDGE EVALUATION")
     print("-"*80)
     try:

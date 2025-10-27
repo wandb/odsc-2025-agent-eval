@@ -6,9 +6,8 @@ Focus: Easy to evaluate and understand
 
 import os
 import json
-from typing import Optional, Dict, List, Any, Tuple, Union
+from typing import Optional, Dict, List, Any, Union
 import pandas as pd
-import matplotlib.pyplot as plt
 from openai import OpenAI
 import weave
 from dotenv import load_dotenv
@@ -31,7 +30,10 @@ When analyzing data:
 3. Use appropriate tools to gather information
 4. Provide clear, accurate answers based on the data
 
-Always explain your findings clearly and relate them back to the user's question.""")
+Always explain your findings clearly and relate them back to the user's question.
+
+Files are located in the data directory. For example, tips.csv is at data/tips.csv. Always use the correct file path.
+""")
     )
     
     def model_post_init(self, __context: Any) -> None:
@@ -155,8 +157,9 @@ Always explain your findings clearly and relate them back to the user's question
             }
         except Exception as e:
             return {"status": "error", "message": str(e)}
-    
-    def get_tool_schemas(self) -> List[Dict[str, Any]]:
+
+    @property
+    def tool_schemas(self) -> List[Dict[str, Any]]:
         """Define the tools available to the agent"""
         return [
             {
@@ -283,7 +286,7 @@ Always explain your findings clearly and relate them back to the user's question
         Returns: (final_answer, execution_trace)
         """
         # Initialize conversation
-        self.conversation_history = [
+        messages = [
             {
                 "role": "system",
                 "content": self.SYSTEM_PROMPT.format()
@@ -307,13 +310,13 @@ Always explain your findings clearly and relate them back to the user's question
             # Get response from LLM
             response = self.client.chat.completions.create(
                 model="gpt-4o-mini",
-                messages=self.conversation_history,
-                tools=self.get_tool_schemas(),
+                messages=messages,
+                tools=self.tool_schemas,
                 tool_choice="auto"
             )
             
             message = response.choices[0].message
-            self.conversation_history.append(message)
+            messages.append(message)
             
             # Check if we're done
             if not message.tool_calls:
@@ -340,7 +343,7 @@ Always explain your findings clearly and relate them back to the user's question
                 })
                 
                 # Add tool result to conversation
-                self.conversation_history.append({
+                messages.append({
                     "role": "tool",
                     "tool_call_id": tool_call.id,
                     "content": json.dumps(result)
@@ -362,6 +365,7 @@ def main() -> None:
     queries = [
         "Load the tips dataset from tips.csv and tell me how many rows it has",
         "What is the average tip amount?",
+        "What is the average tip percentage?",
         "Is there a correlation between total bill and tip amount?",
         "What is the average tip by day of the week?",
         "Do dinner parties tip more than lunch parties on average?"
