@@ -397,19 +397,19 @@ async def run_llm_judge_evaluation() -> Any:
 async def run_evaluations() -> None:
     """Run all evaluations"""
     
-    #print("\n\n1️⃣  GROUND TRUTH EVALUATION")
-    #print("-"*80)
-    #try:
-    #    await run_ground_truth_evaluation()
-    #except Exception as e:
-    #    print(f"⚠️  Error: {e}")
+    print("\n\n1️⃣  GROUND TRUTH EVALUATION")
+    print("-"*80)
+    try:
+        await run_ground_truth_evaluation()
+    except Exception as e:
+        print(f"⚠️  Error: {e}")
 
-    #print("\n\n2️⃣  TOOL SELECTION EVALUATION")
-    #print("-"*80)
-    #try:
-    #    await run_tool_selection_evaluation()
-    #except Exception as e:
-    #    print(f"⚠️  Error: {e}")
+    print("\n\n2️⃣  TOOL SELECTION EVALUATION")
+    print("-"*80)
+    try:
+        await run_tool_selection_evaluation()
+    except Exception as e:
+        print(f"⚠️  Error: {e}")
     
 
     print("\n\n3️⃣  LLM-AS-JUDGE EVALUATION")

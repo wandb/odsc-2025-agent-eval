@@ -20,6 +20,7 @@ load_dotenv()
 class DataAnalysisAgent(weave.Model):
     df: Optional[pd.DataFrame] = None
     conversation_history: List[Dict[str, Any]] = Field(default_factory=list)
+    model: str = Field(default="gpt-4o-mini")
     client: OpenAI = Field(default_factory=lambda: OpenAI(api_key=os.environ.get("OPENAI_API_KEY")))
     SYSTEM_PROMPT: weave.StringPrompt = Field(
         default_factory=lambda: weave.StringPrompt("""You are a data analysis assistant. You help users analyze datasets by using available tools.
@@ -309,7 +310,7 @@ Files are located in the data directory. For example, tips.csv is at data/tips.c
             
             # Get response from LLM
             response = self.client.chat.completions.create(
-                model="gpt-4o-mini",
+                model=self.model,
                 messages=messages,
                 tools=self.tool_schemas,
                 tool_choice="auto"

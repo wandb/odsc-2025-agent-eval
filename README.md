@@ -1,5 +1,7 @@
 # ODSC West 2025 AI Agent Evaluation
 
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1QBiqqQOkYwRK9wvnYv4FA2C6VzGezbuw?usp=sharing)
+
 Workshop materials for evaluating AI agents using **Weights & Biases Weave**.
 
 ## 🎯 Overview
